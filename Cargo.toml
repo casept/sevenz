@@ -1,0 +1,11 @@
+[package]
+name = "sevenz"
+version = "0.1.0"
+edition = "2018"
+authors = ["casept <davids.paskevics@gmail.com>"]
+description = "A crate for manipulating 7zip archives."
+
+[dependencies]
+nom = {version = "6", default-features = false}
+either = {version = "1", default-features = false}
+crc = "2"
