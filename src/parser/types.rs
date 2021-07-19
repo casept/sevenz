@@ -124,7 +124,7 @@ pub struct MainStreamsInfo {}
 #[derive(Debug)]
 pub struct FilesInfo {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct CoderComplex {
     pub num_in_streams: u64,
     pub num_out_streams: u64,
@@ -140,6 +140,8 @@ pub struct Coder {
 #[derive(Debug)]
 pub struct Folder {
     pub coders: Vec<Coder>,
+    pub bind_pairs: Vec<(u64, u64)>,
+    pub packed_streams_indices: Option<Vec<u64>>,
 }
 
 #[derive(Debug)]

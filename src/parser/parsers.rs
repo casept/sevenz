@@ -318,9 +318,66 @@ pub fn coders(input: &[u8]) -> IResult<&[u8], Vec<Coder>, SevenZParserError<&[u8
 pub fn folder(input: &[u8]) -> IResult<&[u8], Folder, SevenZParserError<&[u8]>> {
     let (input, coders_vec) = context("folder coders", coders)(input)?;
 
-    // TODO: Bind pairs
+    let num_out_streams_total: u64 = coders_vec
+        .iter()
+        .map(|x| {
+            if x.complex.is_none() {
+                1
+            } else {
+                x.complex.unwrap().num_out_streams
+            }
+        })
+        .sum();
+    let num_out_streams_total: usize = crate::to_usize_or_err!(num_out_streams_total);
 
-    return Ok((input, Folder { coders: coders_vec }));
+    let num_bind_pairs = num_out_streams_total - 1;
+    let mut input_mut = input;
+    let mut bind_pairs: Vec<(u64, u64)> = vec![];
+    bind_pairs.reserve(num_bind_pairs);
+    for _ in 0..num_bind_pairs {
+        let (input, in_index) =
+            crate::to_err!(context("folder bind pair in_index", sevenz_uint64)(input));
+        let (input, out_index) =
+            crate::to_err!(context("folder bind pair out_index", sevenz_uint64)(input));
+        input_mut = input;
+        bind_pairs.push((in_index, out_index));
+    }
+
+    let num_in_streams_total: u64 = coders_vec
+        .iter()
+        .map(|x| {
+            if x.complex.is_none() {
+                1
+            } else {
+                x.complex.unwrap().num_in_streams
+            }
+        })
+        .sum();
+    let num_in_streams_total: usize = crate::to_usize_or_err!(num_in_streams_total);
+    let num_packed_streams = num_in_streams_total - num_bind_pairs;
+
+    let mut packed_streams_indices = None;
+    if num_packed_streams > 1 {
+        packed_streams_indices = Some(Vec::new());
+        for _ in 0..num_packed_streams {
+            let (input, index) = crate::to_err!(context(
+                "folder packed streams index",
+                sevenz_uint64
+            )(input_mut));
+            packed_streams_indices.as_mut().unwrap().push(index);
+            input_mut = input;
+        }
+    }
+    let input = input_mut;
+
+    return Ok((
+        input,
+        Folder {
+            coders: coders_vec,
+            bind_pairs,
+            packed_streams_indices,
+        },
+    ));
 }
 
 pub fn take_folders(
@@ -372,7 +429,11 @@ pub fn coders_info(input: &[u8]) -> IResult<&[u8], CodersInfo, SevenZParserError
     }
     let input = input_mut;
 
-    // TODO: Finish
+    let (input, _) = context(
+        "coders_info PropertyID::CodersUnPackSize",
+        tag([PropertyID::CodersUnPackSize as u8]),
+    )(input)?;
+
     return Ok((
         input,
         CodersInfo {
