@@ -1,6 +1,8 @@
 use super::parsers;
 use super::types;
 
+use alloc::vec;
+
 #[test]
 fn archive_version() {
     let data = include_bytes!("../../testdata/test-uncompressed.txt.7z");
@@ -51,9 +53,18 @@ fn sevenz_uint64() {
 #[test]
 fn pack_info() {
     let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let expected = types::PackInfo {
+        pack_pos: 0,
+        num_pack_streams: 1,
+        sizes: Some(vec![19]),
+        crcs: None,
+    };
+
     // Cut parts not relevant here
     let input = &input[53..];
     let (_, res) = parsers::pack_info(input).unwrap();
+
+    assert_eq!(res, expected);
 }
 
 #[test]

@@ -117,6 +117,20 @@ pub fn property_id(input: &[u8]) -> IResult<&[u8], PropertyID, SevenZParserError
     }
 }
 
+pub fn tag_property_id(
+    input: &[u8],
+    id: PropertyID,
+) -> IResult<&[u8], PropertyID, SevenZParserError<&[u8]>> {
+    let (input, p) = context("tag_property_id", property_id)(input)?;
+    if p == id {
+        return Ok((input, p));
+    } else {
+        return Err(nom::Err::Failure(SevenZParserError::new(
+            SevenZParserErrorKind::Nom(input, nom::error::ErrorKind::Tag),
+        )));
+    }
+}
+
 #[allow(clippy::type_complexity)]
 pub fn archive_property(
     input: &[u8],
@@ -195,30 +209,34 @@ pub fn pack_info(input: &[u8]) -> IResult<&[u8], PackInfo, SevenZParserError<&[u
     let (input, num_pack_streams) =
         crate::to_err!(context("pack_info num_pack_streams", sevenz_uint64)(input));
     let num_pack_streams_usize = crate::to_usize_or_err!(num_pack_streams);
-    // TODO: Confirm that this is the actual criteria (docs are very vague)
-    if num_pack_streams == 0 {
-        return Ok((
-            input,
-            PackInfo {
-                pack_pos,
-                num_pack_streams,
-                sizes: None,
-                crcs: None,
-            },
-        ));
+
+    let mut sizes = None;
+    let mut crcs = None;
+    // TODO: The spec is not exactly clear about the circumstances under which these 2 are optional.
+    // TODO: For now, let's just assume that they're optional when their markers are present and vice versa.
+    let mut input_mut = input;
+    if tag_property_id(input, PropertyID::Size).is_ok() {
+        let (input, sizes_inner) =
+            context("pack_info sizes", |x| pack_sizes(x, num_pack_streams_usize))(input_mut)?;
+        sizes = Some(sizes_inner);
+        input_mut = input;
     }
+    if tag_property_id(input, PropertyID::CRC).is_ok() {
+        let (input, crcs_inner) =
+            context("pack_info crcs", |x| pack_crcs(x, num_pack_streams_usize))(input_mut)?;
+        crcs = Some(crcs_inner);
+        input_mut = input;
+    }
+    let input = input_mut;
 
-    let (input, sizes) =
-        context("pack_info sizes", |x| pack_sizes(x, num_pack_streams_usize))(input)?;
-    let (input, crcs) = context("pack_info crcs", |x| pack_crcs(x, num_pack_streams_usize))(input)?;
-
+    let (input, _) = context("pack_info PropertyID::End", tag([PropertyID::End as u8]))(input)?;
     return Ok((
         input,
         PackInfo {
             pack_pos,
             num_pack_streams,
-            sizes: Some(sizes),
-            crcs: Some(crcs),
+            sizes: sizes,
+            crcs: crcs,
         },
     ));
 }

@@ -71,7 +71,7 @@ impl TryFrom<u8> for PropertyID {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PackInfo {
     pub pack_pos: u64,
     pub num_pack_streams: u64,
