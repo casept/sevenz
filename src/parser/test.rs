@@ -1,10 +1,10 @@
-use super::combinators;
+use super::parsers;
 use super::types;
 
 #[test]
 fn archive_version() {
-    let data = include_bytes!("../../testdata/test.txt.7z");
-    let (_, res) = combinators::archive_version(&data[6..]).unwrap();
+    let data = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let (_, res) = parsers::archive_version(&data[6..]).unwrap();
 
     let expected = types::ArchiveVersion { major: 0, minor: 4 };
 
@@ -13,8 +13,8 @@ fn archive_version() {
 
 #[test]
 fn signature_header() {
-    let data = include_bytes!("../../testdata/test.txt.7z");
-    let (_, res) = combinators::signature_header(data).unwrap();
+    let data = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let (_, res) = parsers::signature_header(data).unwrap();
 
     let expected_version = types::ArchiveVersion { major: 0, minor: 4 };
     let expected_start_header = types::StartHeader {
@@ -41,7 +41,7 @@ fn sevenz_uint64() {
     ];
 
     for (input, expected, expected_len_remaining) in test_cases {
-        let (remainder, res) = combinators::sevenz_uint64(input).unwrap();
+        let (remainder, res) = parsers::sevenz_uint64(input).unwrap();
 
         assert_eq!(res, *expected);
         assert_eq!(remainder.len(), *expected_len_remaining);
@@ -49,11 +49,19 @@ fn sevenz_uint64() {
 }
 
 #[test]
+fn pack_info() {
+    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    // Cut parts not relevant here
+    let input = &input[53..];
+    let (_, res) = parsers::pack_info(input).unwrap();
+}
+
+#[test]
 fn header() {
-    let input = include_bytes!("../../testdata/test.txt.7z");
+    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
     // Already tested elsewhere, just here to skip ahead enough bytes
-    let (input, _) = combinators::signature_header(input).unwrap();
+    let (input, _) = parsers::signature_header(input).unwrap();
     // From here, header should be in 19 bytes
     let input = &input[19..];
-    let (input, hdr) = combinators::header(input).unwrap();
+    let (input, hdr) = parsers::header(input).unwrap();
 }
