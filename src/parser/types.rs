@@ -125,6 +125,40 @@ pub struct MainStreamsInfo {}
 pub struct FilesInfo {}
 
 #[derive(Debug)]
+pub struct CoderComplex {
+    pub num_in_streams: u64,
+    pub num_out_streams: u64,
+}
+
+#[derive(Debug)]
+pub struct Coder {
+    pub complex: Option<CoderComplex>,
+    pub attrs: Option<Vec<u8>>,
+    pub id: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct Folder {
+    pub coders: Vec<Coder>,
+}
+
+#[derive(Debug)]
+pub struct CodersInfo {
+    pub num_folders: usize,
+    pub folders_or_data_stream_index: Either<Vec<Folder>, u64>,
+}
+
+#[derive(Debug)]
+pub struct SubStreamsInfo {}
+
+#[derive(Debug)]
+pub struct StreamsInfo {
+    pub pack_info: Option<PackInfo>,
+    pub coders_info: Option<CodersInfo>,
+    pub substreams_info: Option<SubStreamsInfo>,
+}
+
+#[derive(Debug)]
 pub struct Header {
     pub archive_properties: ArchiveProperties,
     pub additional_streams: AdditionalStreams,

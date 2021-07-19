@@ -10,6 +10,7 @@ use alloc::vec;
 use alloc::vec::*;
 use core::convert::*;
 
+use either::*;
 use nom::bytes::complete::{tag, take};
 use nom::error::context;
 use nom::number::complete::{u32, u64, u8};
@@ -237,6 +238,146 @@ pub fn pack_info(input: &[u8]) -> IResult<&[u8], PackInfo, SevenZParserError<&[u
             num_pack_streams,
             sizes: sizes,
             crcs: crcs,
+        },
+    ));
+}
+
+pub fn bool_byte(input: &[u8]) -> IResult<&[u8], bool, SevenZParserError<&[u8]>> {
+    let (input, byte) = context("bool_byte byte", u8)(input)?;
+    return match byte {
+        0 => Ok((input, false)),
+        1 => Ok((input, true)),
+        _ => Err(nom::Err::Failure(SevenZParserError::new(
+            SevenZParserErrorKind::InvalidBooleanByte(byte),
+        ))),
+    };
+}
+
+pub fn coder(input: &[u8]) -> IResult<&[u8], Coder, SevenZParserError<&[u8]>> {
+    fn is_complex(props: u8) -> bool {
+        (props & 0b0000_1000) > 0
+    }
+    fn has_attrs(props: u8) -> bool {
+        (props & 0b0000_0100) > 0
+    }
+    fn id_len(props: u8) -> usize {
+        ((props & 0b1111_0000) >> 4) as usize
+    }
+
+    // TODO: Error for illegally set bit 7
+
+    let (input, props) = context("coder properties", u8)(input)?;
+    let (input, id) = context("coder ID", take(id_len(props)))(input)?;
+    let id = Vec::from(id);
+
+    let mut input_mut = input;
+    let mut complex = None;
+    if is_complex(props) {
+        let (input, num_in_streams) =
+            crate::to_err!(context("coder num_in_streams", sevenz_uint64)(input));
+        let (input, num_out_streams) =
+            crate::to_err!(context("coder num_out_streams", sevenz_uint64)(input));
+        complex = Some(CoderComplex {
+            num_in_streams,
+            num_out_streams,
+        });
+        input_mut = input;
+    }
+
+    let mut attrs = None;
+    if has_attrs(props) {
+        let (input, attr_size) =
+            crate::to_err!(context("coder attr_size", sevenz_uint64)(input_mut));
+        let attr_size = crate::to_usize_or_err!(attr_size);
+        let (input, attrs_slice) = context("coder attrs", take(attr_size))(input)?;
+
+        attrs = Some(Vec::from(attrs_slice));
+        input_mut = input;
+    }
+    let input = input_mut;
+
+    return Ok((input, Coder { complex, attrs, id }));
+}
+
+pub fn coders(input: &[u8]) -> IResult<&[u8], Vec<Coder>, SevenZParserError<&[u8]>> {
+    let (input, num_coders) = crate::to_err!(context("coders num_coders", sevenz_uint64)(input));
+    let num_coders = crate::to_usize_or_err!(num_coders);
+    let mut coders_vec = Vec::new();
+    coders_vec.reserve(num_coders);
+    let mut input_mut = input;
+    for _ in 0..num_coders {
+        let (input, one_coder) = context("coders coder", coder)(input_mut)?;
+        input_mut = input;
+        coders_vec.push(one_coder);
+    }
+    let input = input_mut;
+
+    return Ok((input, coders_vec));
+}
+
+pub fn folder(input: &[u8]) -> IResult<&[u8], Folder, SevenZParserError<&[u8]>> {
+    let (input, coders_vec) = context("folder coders", coders)(input)?;
+
+    // TODO: Bind pairs
+
+    return Ok((input, Folder { coders: coders_vec }));
+}
+
+pub fn take_folders(
+    input: &[u8],
+    num_folders: usize,
+) -> IResult<&[u8], Vec<Folder>, SevenZParserError<&[u8]>> {
+    let mut input_mut = input;
+    let mut folders = Vec::new();
+    folders.reserve(num_folders);
+    for _ in 0..num_folders {
+        let (input, one_folder) = context("folders folder", folder)(input_mut)?;
+        input_mut = input;
+        folders.push(one_folder);
+    }
+    let input = input_mut;
+
+    return Ok((input, folders));
+}
+
+pub fn coders_info(input: &[u8]) -> IResult<&[u8], CodersInfo, SevenZParserError<&[u8]>> {
+    let (input, _) = context(
+        "coders_info PropertyID::UnPackInfo",
+        tag([PropertyID::UnPackInfo as u8]),
+    )(input)?;
+    let (input, _) = context(
+        "coders_info PropertyID::Folder",
+        tag([PropertyID::Folder as u8]),
+    )(input)?;
+
+    let (input, num_folders) =
+        crate::to_err!(context("coders_info num_folders", sevenz_uint64)(input));
+    let num_folders = crate::to_usize_or_err!(num_folders);
+
+    let (input, external) = context("coders_info external", bool_byte)(input)?;
+    let folders_or_data_stream_index;
+    let mut input_mut = input;
+    if external {
+        let (input, data_stream_index) = crate::to_err!(context(
+            "coders_info data_stream_index",
+            sevenz_uint64
+        )(input_mut));
+        folders_or_data_stream_index = Right(data_stream_index);
+        input_mut = input;
+    } else {
+        let (input, folders) =
+            context("coders_info folders", |x| take_folders(x, num_folders))(input)?;
+        folders_or_data_stream_index = Left(folders);
+        input_mut = input;
+    }
+    let input = input_mut;
+
+    // TODO: Finish
+    return Ok((
+        input,
+        CodersInfo {
+            num_folders,
+            folders_or_data_stream_index,
         },
     ));
 }

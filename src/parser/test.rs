@@ -68,6 +68,17 @@ fn pack_info() {
 }
 
 #[test]
+fn coders_info() {
+    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+
+    // Cut parts not relevant here
+    let input = &input[59..];
+    let (_, res) = parsers::coders_info(input).unwrap();
+
+    // TODO: Compare
+}
+
+#[test]
 fn header() {
     let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
     // Already tested elsewhere, just here to skip ahead enough bytes
