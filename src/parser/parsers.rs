@@ -150,6 +150,42 @@ pub fn archive_properties(
     }
 }
 
+pub fn pack_sizes(
+    input: &[u8],
+    num_pack_sizes: usize,
+) -> IResult<&[u8], Vec<u64>, SevenZParserError<&[u8]>> {
+    let (input, _) = context("pack_info PropertyID::Size", tag([PropertyID::Size as u8]))(input)?;
+    let mut sizes: Vec<u64> = vec![];
+    sizes.reserve(num_pack_sizes);
+    let mut input_mut: &[u8] = input;
+    for _ in 0..num_pack_sizes {
+        let (input, pack_size) =
+            crate::to_err!(context("pack_sizes pack_size", sevenz_uint64)(input_mut));
+        sizes.push(pack_size);
+        input_mut = input;
+    }
+    return Ok((input_mut, sizes));
+}
+
+pub fn pack_crcs(
+    input: &[u8],
+    num_crcs: usize,
+) -> IResult<&[u8], Vec<u32>, SevenZParserError<&[u8]>> {
+    let (input, _) = context("pack_crcs PropertyID::CRC", tag([PropertyID::CRC as u8]))(input)?;
+    let mut crcs: Vec<u32> = vec![];
+    crcs.reserve(num_crcs);
+    let mut input_mut: &[u8] = input;
+    for _ in 0..num_crcs {
+        let (input, crc) = crate::to_err!(context(
+            "pack_crcs pack_stream_digests",
+            u32(Endianness::Little)
+        )(input_mut));
+        crcs.push(crc);
+        input_mut = input;
+    }
+    return Ok((input_mut, crcs));
+}
+
 pub fn pack_info(input: &[u8]) -> IResult<&[u8], PackInfo, SevenZParserError<&[u8]>> {
     let (input, _) = context(
         "pack_info PropertyID::PackInfo",
@@ -158,6 +194,7 @@ pub fn pack_info(input: &[u8]) -> IResult<&[u8], PackInfo, SevenZParserError<&[u
     let (input, pack_pos) = crate::to_err!(context("pack_info pack_pos", sevenz_uint64)(input));
     let (input, num_pack_streams) =
         crate::to_err!(context("pack_info num_pack_streams", sevenz_uint64)(input));
+    let num_pack_streams_usize = crate::to_usize_or_err!(num_pack_streams);
     // TODO: Confirm that this is the actual criteria (docs are very vague)
     if num_pack_streams == 0 {
         return Ok((
@@ -170,26 +207,13 @@ pub fn pack_info(input: &[u8]) -> IResult<&[u8], PackInfo, SevenZParserError<&[u
             },
         ));
     }
-    let mut sizes: Vec<u64> = vec![];
-    let (input, _) = context("pack_info PropertyID::Size", tag([PropertyID::Size as u8]))(input)?;
-    let mut input_mut: &[u8] = input;
-    for _ in 0..num_pack_streams {
-        let (input, pack_size) =
-            crate::to_err!(context("pack_info pack_size", sevenz_uint64)(input));
-        sizes.push(pack_size);
-        input_mut = input;
-    }
 
-    let mut crcs: Vec<u32> = vec![];
-    let (input, _) = context("pack_info PropertyID::CRC", tag([PropertyID::CRC as u8]))(input)?;
-    for _ in 0..num_pack_streams {
-        let (input, crc) = context("pack_info packed stream CRC", u32(Endianness::Little))(input)?;
-        crcs.push(crc);
-        input_mut = input;
-    }
+    let (input, sizes) =
+        context("pack_info sizes", |x| pack_sizes(x, num_pack_streams_usize))(input)?;
+    let (input, crcs) = context("pack_info crcs", |x| pack_crcs(x, num_pack_streams_usize))(input)?;
 
     return Ok((
-        input_mut,
+        input,
         PackInfo {
             pack_pos,
             num_pack_streams,
