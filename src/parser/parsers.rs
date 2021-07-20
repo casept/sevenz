@@ -13,7 +13,7 @@ use core::convert::*;
 
 use either::*;
 use nom::bytes::complete::{tag, take};
-use nom::combinator::{cond, map};
+use nom::combinator::{cond, map, opt};
 use nom::error::context;
 use nom::multi::{count, length_count};
 use nom::number::complete::{le_u32, le_u64, u8};
@@ -367,6 +367,9 @@ pub fn coders_info(input: &[u8]) -> SevenZResult<CodersInfo> {
         "coders_info unpack_digests",
         preceded_opt(tag([PropertyID::CRC as u8]), count(le_u32, num_folders)),
     )(input)?;
+
+    let (input, _) = context("coders_info PropertyID::End", tag([PropertyID::End as u8]))(input)?;
+
     return Ok((
         input,
         CodersInfo {
@@ -378,10 +381,80 @@ pub fn coders_info(input: &[u8]) -> SevenZResult<CodersInfo> {
     ));
 }
 
-pub fn streams_info(input: &[u8]) -> SevenZResult<()> {
-    let (input, _) = context("streams_info pack_info", pack_info)(input)?;
+pub fn substreams_info(input: &[u8], num_folders: usize) -> SevenZResult<SubStreamsInfo> {
+    let (input, _) = context(
+        "substreams_info PropertyID::SubStreamsInfo",
+        tag([PropertyID::SubStreamsInfo as u8]),
+    )(input)?;
+
+    let (input, num_unpack_streams_in_folders) = context(
+        "coders_info num_unpack_streams_in_folders",
+        preceded_opt(
+            tag([PropertyID::NumUnPackStream as u8]),
+            count(sevenz_uint64, num_folders),
+        ),
+    )(input)?;
+
+    let (input, unpack_sizes) = context(
+        "coders_info unpack_sizes",
+        preceded_opt(
+            tag([PropertyID::Size as u8]),
+            count(sevenz_uint64, {
+                // FIXME: Don't panic
+                //let total_streams: u64 = num_unpack_streams_in_folders.unwrap().iter().sum();
+                let total_streams: u64 = 1;
+                crate::to_usize_or_err!(total_streams)
+            }),
+        ),
+    )(input)?;
+
+    // FIXME: Have to figure out how to calculate number of streams with unknown CRC
+    let (input, unknown_crcs) = context(
+        "coders_info unknown_crcs",
+        preceded_opt(
+            tag([PropertyID::CRC as u8]),
+            count(sevenz_uint64, crate::to_usize_or_err!(1)),
+        ),
+    )(input)?;
+
+    let (input, _) = context(
+        "substreams_info PropertyID::End",
+        tag([PropertyID::End as u8]),
+    )(input)?;
+
+    return Ok((input, SubStreamsInfo {}));
+}
+
+pub fn streams_info(input: &[u8]) -> SevenZResult<StreamsInfo> {
+    // FIXME: Pass proper num_folders
+    let (input, pack_info_data) = context("streams_info pack_info", opt(pack_info))(input)?;
+    let (input, coders_info_data) = context("streams_info coders_info", opt(coders_info))(input)?;
+    let (input, substreams_info_data) = context(
+        "streams_info substreams_info",
+        opt(|x| substreams_info(x, 1)),
+    )(input)?;
+    let (input, _) = context("streams_info PropertyID::End", tag([PropertyID::End as u8]))(input)?;
+
     // TODO:
-    return Ok((input, ()));
+    return Ok((
+        input,
+        StreamsInfo {
+            pack_info: pack_info_data,
+            coders_info: coders_info_data,
+            substreams_info: substreams_info_data,
+        },
+    ));
+}
+
+pub fn files_info(input: &[u8]) -> SevenZResult<FilesInfo> {
+    let (input, _) = context(
+        "files_info PropertyID::FilesInfo",
+        tag([PropertyID::FilesInfo as u8]),
+    )(input)?;
+
+    let (input, num_files) = context("files_info num_files", sevenz_uint64)(input)?;
+
+    return Ok((input, FilesInfo {}));
 }
 
 pub fn header(input: &[u8]) -> SevenZResult<()> {

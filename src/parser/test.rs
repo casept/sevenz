@@ -94,6 +94,33 @@ fn coders_info() {
 }
 
 #[test]
+fn substreams_info() {
+    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    // Cut parts not relevant here
+    let input = &input[71..];
+
+    let (_, res) = parsers::substreams_info(input, 1).unwrap();
+}
+
+#[test]
+fn streams_info() {
+    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    // Cut parts not relevant here
+    let input = &input[53..];
+
+    let (_, res) = parsers::streams_info(input).unwrap();
+}
+
+#[test]
+fn files_info() {
+    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    // Cut parts not relevant here
+    let input = &input[80..];
+
+    let (_, res) = parsers::files_info(input).unwrap();
+}
+
+#[test]
 fn header() {
     let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
     // Already tested elsewhere, just here to skip ahead enough bytes
