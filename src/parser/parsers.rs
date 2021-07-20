@@ -11,6 +11,7 @@ use alloc::vec;
 use alloc::vec::*;
 use core::convert::*;
 
+use either::*;
 use nom::bytes::complete::{tag, take};
 use nom::combinator::{cond, map};
 use nom::error::context;
@@ -239,27 +240,10 @@ pub fn coder(input: &[u8]) -> SevenZResult<Coder> {
         ),
     )(input)?;
 
-    let mut input_mut = input;
-    let mut complex = None;
-    if is_complex(props) {
-        let (input, num_in_streams) = context("coder num_in_streams", sevenz_uint64)(input)?;
-        let (input, num_out_streams) = context("coder num_out_streams", sevenz_uint64)(input)?;
-        complex = Some(CoderComplex {
-            num_in_streams,
-            num_out_streams,
-        });
-        input_mut = input;
-    }
-
-    let mut attrs = None;
-    if has_attrs(props) {
-        let (input, attr_size) = context("coder attr_size", sevenz_uint64_as_usize)(input_mut)?;
-        let (input, attrs_slice) = context("coder attrs", take(attr_size))(input)?;
-
-        attrs = Some(Vec::from(attrs_slice));
-        input_mut = input;
-    }
-    let input = input_mut;
+    let (input, attrs) = context(
+        "coder attributes",
+        cond(has_attrs(props), length_count(sevenz_uint64_as_usize, u8)),
+    )(input)?;
 
     return Ok((input, Coder { complex, attrs, id }));
 }
@@ -309,10 +293,11 @@ pub fn folder(input: &[u8]) -> SevenZResult<Folder> {
     let num_in_streams_total: usize = crate::to_usize_or_err!(num_in_streams_total);
     let num_packed_streams = num_in_streams_total - num_bind_pairs;
 
+    // TODO: The spec says that it should be num_packed_streams > 1, but in that case we get a leftover byte.
     let (input, packed_streams_indices) = context(
         "folder packed_streams_indices",
         cond(
-            num_packed_streams > 1,
+            num_packed_streams >= 1,
             count(sevenz_uint64, num_packed_streams),
         ),
     )(input)?;
@@ -352,11 +337,43 @@ pub fn coders_info(input: &[u8]) -> SevenZResult<CodersInfo> {
         tag([PropertyID::CodersUnPackSize as u8]),
     )(input)?;
 
+    // Read output stream sizes of all folders
+    let all_coders: Vec<Coder> = folders_or_data_stream_index
+        .clone()
+        .right()
+        .unwrap()
+        .iter()
+        .map(|x| x.coders.clone())
+        .flatten()
+        .collect();
+    let num_total_out_streams: u64 = all_coders
+        .iter()
+        .map(|x| {
+            if x.complex.is_none() {
+                1
+            } else {
+                x.complex.unwrap().num_out_streams
+            }
+        })
+        .sum();
+    let num_total_out_streams = crate::to_usize_or_err!(num_total_out_streams);
+
+    let (input, streams_unpack_sizes) = context(
+        "coders_info streams_unpack_sizes",
+        count(sevenz_uint64, num_total_out_streams),
+    )(input)?;
+
+    let (input, folders_unpack_digests) = context(
+        "coders_info unpack_digests",
+        preceded_opt(tag([PropertyID::CRC as u8]), count(le_u32, num_folders)),
+    )(input)?;
     return Ok((
         input,
         CodersInfo {
             num_folders,
             folders_or_data_stream_index,
+            streams_unpack_sizes,
+            folders_unpack_digests,
         },
     ));
 }

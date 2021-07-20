@@ -1,3 +1,5 @@
+extern crate std;
+
 use super::parsers;
 use super::types;
 
@@ -63,19 +65,32 @@ fn pack_info() {
     // Cut parts not relevant here
     let input = &input[53..];
     let (_, res) = parsers::pack_info(input).unwrap();
-
     assert_eq!(res, expected);
 }
 
 #[test]
 fn coders_info() {
     let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let expected = types::CodersInfo {
+        num_folders: 1,
+        folders_or_data_stream_index: either::Right(vec![types::Folder {
+            coders: vec![types::Coder {
+                complex: None,
+                attrs: None,
+                id: vec![33, 1],
+            }],
+            bind_pairs: vec![],
+            packed_streams_indices: Some(vec![0]),
+        }]),
+        streams_unpack_sizes: vec![15],
+        folders_unpack_digests: None,
+    };
 
     // Cut parts not relevant here
     let input = &input[59..];
     let (_, res) = parsers::coders_info(input).unwrap();
 
-    // TODO: Compare
+    assert_eq!(res, expected);
 }
 
 #[test]
