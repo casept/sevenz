@@ -2,6 +2,7 @@
 
 extern crate std;
 
+use super::combinators::*;
 use super::crc;
 use super::err::*;
 use super::types::*;
@@ -10,20 +11,22 @@ use alloc::vec;
 use alloc::vec::*;
 use core::convert::*;
 
-use either::*;
 use nom::bytes::complete::{tag, take};
-use nom::combinator::cond;
+use nom::combinator::{cond, map};
 use nom::error::context;
 use nom::multi::{count, length_count};
 use nom::number::complete::{le_u32, le_u64, u8};
-use nom::IResult;
+use nom::sequence::pair;
 
 /// Header magic bytes
 const MAGIC: [u8; 6] = [b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C];
 
+/// Error type that all parsers return.
+pub type SevenZResult<'a, T> = nom::IResult<&'a [u8], T, SevenZParserError<&'a [u8]>>;
+
 /// 7zip uses a weird packed integer format to represent some u64 values.
 /// Parse that and convert it to a normal u64 in native endianness.
-pub fn sevenz_uint64(input: &[u8]) -> IResult<&[u8], u64, SevenZParserError<&[u8]>> {
+pub fn sevenz_uint64(input: &[u8]) -> SevenZResult<u64> {
     fn count_leading_ones(b: u8) -> usize {
         let mut num: usize = 0;
         for shift in 0..8 {
@@ -50,19 +53,19 @@ pub fn sevenz_uint64(input: &[u8]) -> IResult<&[u8], u64, SevenZParserError<&[u8
     return Ok((input_mut, val));
 }
 /// Like sevenz_uint64, but convert to usize and return an error if the conversion fails.
-pub fn sevenz_uint64_as_usize(input: &[u8]) -> IResult<&[u8], usize, SevenZParserError<&[u8]>> {
+pub fn sevenz_uint64_as_usize(input: &[u8]) -> SevenZResult<usize> {
     let (input, as_u64) = context("sevenz_uint64_as_usize as_u64", sevenz_uint64)(input)?;
     let as_usize = crate::to_usize_or_err!(as_u64);
     return Ok((input, as_usize));
 }
 
-pub fn archive_version(input: &[u8]) -> IResult<&[u8], ArchiveVersion, SevenZParserError<&[u8]>> {
+pub fn archive_version(input: &[u8]) -> SevenZResult<ArchiveVersion> {
     let (input, major) = context("archive_version major", u8)(input)?;
     let (input, minor) = context("archive_version minor", u8)(input)?;
     return Ok((input, ArchiveVersion { major, minor }));
 }
 
-pub fn start_header(input: &[u8]) -> IResult<&[u8], StartHeader, SevenZParserError<&[u8]>> {
+pub fn start_header(input: &[u8]) -> SevenZResult<StartHeader> {
     let (input, next_header_offset) = context("start_header next_header_offset", le_u64)(input)?;
     let (input, next_header_size) = context("start_header next_header_size", le_u64)(input)?;
     let (input, next_header_crc) = context("start_header next_header_crc", le_u32)(input)?;
@@ -76,7 +79,7 @@ pub fn start_header(input: &[u8]) -> IResult<&[u8], StartHeader, SevenZParserErr
     ));
 }
 
-pub fn signature_header(input: &[u8]) -> IResult<&[u8], SignatureHeader, SevenZParserError<&[u8]>> {
+pub fn signature_header(input: &[u8]) -> SevenZResult<SignatureHeader> {
     let (input, _) = context("signature_header magic bytes", tag(MAGIC))(input)?;
     let (input, archive_version) =
         context("signature_header archive_version", archive_version)(input)?;
@@ -105,7 +108,7 @@ pub fn signature_header(input: &[u8]) -> IResult<&[u8], SignatureHeader, SevenZP
     ));
 }
 
-pub fn property_id(input: &[u8]) -> IResult<&[u8], PropertyID, SevenZParserError<&[u8]>> {
+pub fn property_id(input: &[u8]) -> SevenZResult<PropertyID> {
     let (input, p_u8) = context("property_id", u8)(input)?;
     match PropertyID::try_from(p_u8) {
         Ok(p) => return Ok((input, p)),
@@ -117,10 +120,7 @@ pub fn property_id(input: &[u8]) -> IResult<&[u8], PropertyID, SevenZParserError
     }
 }
 
-pub fn tag_property_id(
-    input: &[u8],
-    id: PropertyID,
-) -> IResult<&[u8], PropertyID, SevenZParserError<&[u8]>> {
+pub fn tag_property_id(input: &[u8], id: PropertyID) -> SevenZResult<PropertyID> {
     let (input, p) = context("tag_property_id", property_id)(input)?;
     if p == id {
         return Ok((input, p));
@@ -131,18 +131,14 @@ pub fn tag_property_id(
     }
 }
 
-#[allow(clippy::type_complexity)]
-pub fn archive_property(
-    input: &[u8],
-) -> IResult<&[u8], (PropertyID, &[u8]), SevenZParserError<&[u8]>> {
+pub fn archive_property(input: &[u8]) -> SevenZResult<(PropertyID, &[u8])> {
     let (input, prop_type) = context("archive_property prop_type", property_id)(input)?;
     let (input, len) = context("archive_property len", sevenz_uint64_as_usize)(input)?;
     let (input, prop_data) = context("archive_property prop_data", take(len))(input)?;
     return Ok((input, (prop_type, prop_data)));
 }
-pub fn archive_properties(
-    input: &[u8],
-) -> IResult<&[u8], ArchiveProperties, SevenZParserError<&[u8]>> {
+
+pub fn archive_properties(input: &[u8]) -> SevenZResult<ArchiveProperties> {
     let (input, _) = context(
         "archive_properties PropertyID::ArchiveProperties",
         tag([PropertyID::ArchiveProperties as u8]),
@@ -163,27 +159,7 @@ pub fn archive_properties(
     }
 }
 
-/// Runs the second parser and returns it's output/error if the first parser succeeds.
-/// Doesn't run the second parser and returns Ok((input, None)) if the first parser fails.
-pub fn preceded_opt<I, O1, O2, E: nom::error::ParseError<I>, F, G>(
-    mut first: F,
-    mut second: G,
-) -> impl FnMut(I) -> IResult<I, Option<O2>, E>
-where
-    F: nom::Parser<I, O1, E>,
-    G: nom::Parser<I, O2, E>,
-    I: Clone,
-{
-    move |input: I| match first.parse(input.clone()) {
-        Ok((input, _)) => {
-            let (input, val) = second.parse(input)?;
-            return Ok((input, Some(val)));
-        }
-        Err(_) => Ok((input, None)),
-    }
-}
-
-pub fn pack_info(input: &[u8]) -> IResult<&[u8], PackInfo, SevenZParserError<&[u8]>> {
+pub fn pack_info(input: &[u8]) -> SevenZResult<PackInfo> {
     let (input, _) = context(
         "pack_info PropertyID::PackInfo",
         tag([PropertyID::PackInfo as u8]),
@@ -221,7 +197,7 @@ pub fn pack_info(input: &[u8]) -> IResult<&[u8], PackInfo, SevenZParserError<&[u
     ));
 }
 
-pub fn bool_byte(input: &[u8]) -> IResult<&[u8], bool, SevenZParserError<&[u8]>> {
+pub fn bool_byte(input: &[u8]) -> SevenZResult<bool> {
     let (input, byte) = context("bool_byte byte", u8)(input)?;
     return match byte {
         0 => Ok((input, false)),
@@ -232,7 +208,7 @@ pub fn bool_byte(input: &[u8]) -> IResult<&[u8], bool, SevenZParserError<&[u8]>>
     };
 }
 
-pub fn coder(input: &[u8]) -> IResult<&[u8], Coder, SevenZParserError<&[u8]>> {
+pub fn coder(input: &[u8]) -> SevenZResult<Coder> {
     fn is_complex(props: u8) -> bool {
         (props & 0b0000_1000) > 0
     }
@@ -248,6 +224,20 @@ pub fn coder(input: &[u8]) -> IResult<&[u8], Coder, SevenZParserError<&[u8]>> {
     let (input, props) = context("coder properties", u8)(input)?;
     let (input, id) = context("coder ID", take(id_len(props)))(input)?;
     let id = Vec::from(id);
+
+    let (input, complex) = cond(
+        is_complex(props),
+        context(
+            "coder number of complex streams",
+            map(
+                pair(sevenz_uint64, sevenz_uint64),
+                |(num_in_streams, num_out_streams)| CoderComplex {
+                    num_in_streams,
+                    num_out_streams,
+                },
+            ),
+        ),
+    )(input)?;
 
     let mut input_mut = input;
     let mut complex = None;
@@ -274,7 +264,7 @@ pub fn coder(input: &[u8]) -> IResult<&[u8], Coder, SevenZParserError<&[u8]>> {
     return Ok((input, Coder { complex, attrs, id }));
 }
 
-pub fn folder_coders(input: &[u8]) -> IResult<&[u8], Vec<Coder>, SevenZParserError<&[u8]>> {
+pub fn folder_coders(input: &[u8]) -> SevenZResult<Vec<Coder>> {
     let (input, coders_vec) = context(
         "folder_coders coders",
         length_count(
@@ -285,7 +275,7 @@ pub fn folder_coders(input: &[u8]) -> IResult<&[u8], Vec<Coder>, SevenZParserErr
     return Ok((input, coders_vec));
 }
 
-pub fn folder(input: &[u8]) -> IResult<&[u8], Folder, SevenZParserError<&[u8]>> {
+pub fn folder(input: &[u8]) -> SevenZResult<Folder> {
     let (input, coders_vec) = context("folder coders", folder_coders)(input)?;
 
     let num_out_streams_total: u64 = coders_vec
@@ -301,15 +291,10 @@ pub fn folder(input: &[u8]) -> IResult<&[u8], Folder, SevenZParserError<&[u8]>> 
     let num_out_streams_total: usize = crate::to_usize_or_err!(num_out_streams_total);
 
     let num_bind_pairs = num_out_streams_total - 1;
-    let mut input_mut = input;
-    let mut bind_pairs: Vec<(u64, u64)> = vec![];
-    bind_pairs.reserve(num_bind_pairs);
-    for _ in 0..num_bind_pairs {
-        let (input, in_index) = context("folder bind pair in_index", sevenz_uint64)(input)?;
-        let (input, out_index) = context("folder bind pair out_index", sevenz_uint64)(input)?;
-        input_mut = input;
-        bind_pairs.push((in_index, out_index));
-    }
+    let (input, bind_pairs) = context(
+        "folder bind_pairs",
+        count(pair(sevenz_uint64, sevenz_uint64), num_bind_pairs),
+    )(input)?;
 
     let num_in_streams_total: u64 = coders_vec
         .iter()
@@ -342,24 +327,7 @@ pub fn folder(input: &[u8]) -> IResult<&[u8], Folder, SevenZParserError<&[u8]>> 
     ));
 }
 
-pub fn take_folders(
-    input: &[u8],
-    num_folders: usize,
-) -> IResult<&[u8], Vec<Folder>, SevenZParserError<&[u8]>> {
-    let mut input_mut = input;
-    let mut folders = Vec::new();
-    folders.reserve(num_folders);
-    for _ in 0..num_folders {
-        let (input, one_folder) = context("folders folder", folder)(input_mut)?;
-        input_mut = input;
-        folders.push(one_folder);
-    }
-    let input = input_mut;
-
-    return Ok((input, folders));
-}
-
-pub fn coders_info(input: &[u8]) -> IResult<&[u8], CodersInfo, SevenZParserError<&[u8]>> {
+pub fn coders_info(input: &[u8]) -> SevenZResult<CodersInfo> {
     let (input, _) = context(
         "coders_info PropertyID::UnPackInfo",
         tag([PropertyID::UnPackInfo as u8]),
@@ -372,20 +340,12 @@ pub fn coders_info(input: &[u8]) -> IResult<&[u8], CodersInfo, SevenZParserError
     let (input, num_folders) = context("coders_info num_folders", sevenz_uint64_as_usize)(input)?;
 
     let (input, external) = context("coders_info external", bool_byte)(input)?;
-    let folders_or_data_stream_index;
-    let mut input_mut = input;
-    if external {
-        let (input, data_stream_index) =
-            context("coders_info data_stream_index", sevenz_uint64)(input_mut)?;
-        folders_or_data_stream_index = Right(data_stream_index);
-        input_mut = input;
-    } else {
-        let (input, folders) =
-            context("coders_info folders", count(folder, num_folders))(input_mut)?;
-        folders_or_data_stream_index = Left(folders);
-        input_mut = input;
-    }
-    let input = input_mut;
+
+    let (input, folders_or_data_stream_index) = either(
+        external,
+        context("coders_info data_stream_index", sevenz_uint64),
+        context("coders_info folders", count(folder, num_folders)),
+    )(input)?;
 
     let (input, _) = context(
         "coders_info PropertyID::CodersUnPackSize",
@@ -401,13 +361,13 @@ pub fn coders_info(input: &[u8]) -> IResult<&[u8], CodersInfo, SevenZParserError
     ));
 }
 
-pub fn streams_info(input: &[u8]) -> IResult<&[u8], (), SevenZParserError<&[u8]>> {
+pub fn streams_info(input: &[u8]) -> SevenZResult<()> {
     let (input, _) = context("streams_info pack_info", pack_info)(input)?;
     // TODO:
     return Ok((input, ()));
 }
 
-pub fn header(input: &[u8]) -> IResult<&[u8], (), SevenZParserError<&[u8]>> {
+pub fn header(input: &[u8]) -> SevenZResult<()> {
     let (input, _) = context("header PropertyID::Header", tag([PropertyID::Header as u8]))(input)?;
     let (input, segment) = property_id(input)?;
     use PropertyID::*;
@@ -429,7 +389,7 @@ pub fn header(input: &[u8]) -> IResult<&[u8], (), SevenZParserError<&[u8]>> {
 }
 
 /*
-pub fn archive(input: &[u8]) -> IResult<&[u8], Archive> {
+pub fn archive(input: &[u8]) -> SevenZResult<Archive> {
     let (input, signature_header) = to_err!(signature_header(input));
     return Ok((
         input,

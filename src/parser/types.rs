@@ -147,7 +147,7 @@ pub struct Folder {
 #[derive(Debug)]
 pub struct CodersInfo {
     pub num_folders: usize,
-    pub folders_or_data_stream_index: Either<Vec<Folder>, u64>,
+    pub folders_or_data_stream_index: Either<u64, Vec<Folder>>,
 }
 
 #[derive(Debug)]
