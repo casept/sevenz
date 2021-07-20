@@ -74,7 +74,7 @@ impl TryFrom<u8> for PropertyID {
 #[derive(Debug, PartialEq)]
 pub struct PackInfo {
     pub pack_pos: u64,
-    pub num_pack_streams: u64,
+    pub num_pack_streams: usize,
     pub sizes: Option<Vec<u64>>,
     pub crcs: Option<Vec<u32>>,
 }

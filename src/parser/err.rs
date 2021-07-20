@@ -11,6 +11,8 @@ pub enum SevenZParserErrorKind<I> {
     // InvalidPropertyID(id)
     InvalidPropertyID(u8),
     ToUsizeConversionFailure(<usize as TryFrom<u64>>::Error),
+    // InvalidBooleanByte(value)
+    InvalidBooleanByte(u8),
 }
 
 /// The error type returned by all parsers.
@@ -59,31 +61,16 @@ impl<I> ContextError<I> for SevenZParserError<I> {
     }
 }
 
-/// Macro for converting from the error emitted by builtin combinators to our error type.
-#[macro_export]
-macro_rules! to_err {
-( $( $x:expr ),+ ) => {
-        {
-            $(
-                match $x {
-        Ok(res) => res,
-        Err(e) => return Err(nom::Err::Error(SevenZParserError::from_err(e))),
-    }
-            )+
-        }
-    };
-}
-
-/// Macro for converting form u64 to usize, or returning the correct error if conversion not possible
+/// Macro for converting from u64 to usize, or returning the correct error if conversion not possible
 #[macro_export]
 macro_rules! to_usize_or_err {
 ( $( $x:expr ),+ ) => {
         {
             $(
                 match usize::try_from($x) {
-        Ok(res) => res,
-        Err(e) => return Err(nom::Err::Error(SevenZParserError::new(SevenZParserErrorKind::ToUsizeConversionFailure(e)))),
-    }
+			Ok(res) => res,
+        		Err(e) => return Err(nom::Err::Error(SevenZParserError::new(SevenZParserErrorKind::ToUsizeConversionFailure(e)))),
+		}
             )+
         }
     };
