@@ -34,6 +34,6 @@ pub fn sevenz_uint64(input: &[u8]) -> SevenZResult<u64> {
 /// Like sevenz_uint64, but convert to usize and return an error if the conversion fails.
 pub fn sevenz_uint64_as_usize(input: &[u8]) -> SevenZResult<usize> {
     let (input, as_u64) = context("sevenz_uint64_as_usize as_u64", sevenz_uint64)(input)?;
-    let as_usize = crate::to_usize_or_err!(as_u64);
+    let as_usize = to_usize_or_err!(as_u64);
     return Ok((input, as_usize));
 }

@@ -2,6 +2,12 @@ use alloc::vec::Vec;
 use core::convert::{From, TryFrom};
 use nom::error::*;
 
+/// Error type for failed conversions.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum SevenZConversionError {
+    ToUsize(<usize as TryFrom<u64>>::Error),
+}
+
 /// The types of errors that may be returned by the parser.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SevenZParserErrorKind<I> {
@@ -10,7 +16,7 @@ pub enum SevenZParserErrorKind<I> {
     Crc(u32, u32),
     // InvalidPropertyID(id)
     InvalidPropertyID(u8),
-    ToUsizeConversionFailure(<usize as TryFrom<u64>>::Error),
+    ConversionFailure(SevenZConversionError),
     // InvalidBooleanByte(value)
     InvalidBooleanByte(u8),
 }
@@ -61,17 +67,8 @@ impl<I> ContextError<I> for SevenZParserError<I> {
     }
 }
 
-/// Macro for converting from u64 to usize, or returning the correct error if conversion not possible
-#[macro_export]
-macro_rules! to_usize_or_err {
-( $( $x:expr ),+ ) => {
-        {
-            $(
-                match usize::try_from($x) {
-			Ok(res) => res,
-        		Err(e) => return Err(nom::Err::Error(SevenZParserError::new(SevenZParserErrorKind::ToUsizeConversionFailure(e)))),
-		}
-            )+
-        }
-    };
+impl<I> From<SevenZConversionError> for SevenZParserError<I> {
+    fn from(e: SevenZConversionError) -> Self {
+        SevenZParserError::<I>::new(SevenZParserErrorKind::ConversionFailure(e))
+    }
 }

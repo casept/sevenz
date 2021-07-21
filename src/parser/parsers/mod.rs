@@ -15,6 +15,7 @@ use super::types::*;
 use alloc::vec;
 use alloc::vec::*;
 use core::convert::*;
+
 use nom::bytes::complete::{tag, take};
 use nom::combinator::{cond, map, opt};
 use nom::error::context;
@@ -27,6 +28,21 @@ const MAGIC: [u8; 6] = [b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C];
 
 /// Error type that all parsers return.
 pub type SevenZResult<'a, T> = nom::IResult<&'a [u8], T, SevenZParserError<&'a [u8]>>;
+
+/// Convert a u64 to usize or error on failure.
+macro_rules! to_usize_or_err {
+( $( $x:expr ),+ ) => {
+        {
+            $(
+                use core::convert::TryFrom;
+                match usize::try_from($x) {
+                       Ok(res) => res,
+                       Err(e) => return Err(nom::Err::Error(crate::parser::err::SevenZParserError::new(crate::parser::err::SevenZParserErrorKind::ConversionFailure(crate::parser::err::SevenZConversionError::ToUsize(e))))),
+               }
+            )+
+        }
+    };
+}
 
 pub fn archive_version(input: &[u8]) -> SevenZResult<ArchiveVersion> {
     let (input, major) = context("archive_version major", u8)(input)?;
@@ -237,7 +253,7 @@ pub fn folder(input: &[u8]) -> SevenZResult<Folder> {
             None => 1,
         })
         .sum();
-    let num_out_streams_total: usize = crate::to_usize_or_err!(num_out_streams_total);
+    let num_out_streams_total: usize = to_usize_or_err!(num_out_streams_total);
 
     let num_bind_pairs = num_out_streams_total - 1;
     let (input, bind_pairs) = context(
@@ -252,7 +268,7 @@ pub fn folder(input: &[u8]) -> SevenZResult<Folder> {
             None => 1,
         })
         .sum();
-    let num_in_streams_total: usize = crate::to_usize_or_err!(num_in_streams_total);
+    let num_in_streams_total: usize = to_usize_or_err!(num_in_streams_total);
     let num_packed_streams = num_in_streams_total - num_bind_pairs;
 
     // TODO: The spec says that it should be num_packed_streams > 1, but in that case we get a leftover byte.
@@ -315,7 +331,7 @@ pub fn coders_info(input: &[u8]) -> SevenZResult<CodersInfo> {
             None => 1,
         })
         .sum();
-    let num_total_out_streams = crate::to_usize_or_err!(num_total_out_streams);
+    let num_total_out_streams = to_usize_or_err!(num_total_out_streams);
 
     let (input, streams_unpack_sizes) = context(
         "coders_info streams_unpack_sizes",
@@ -362,7 +378,7 @@ pub fn substreams_info(input: &[u8], num_folders: usize) -> SevenZResult<SubStre
                 // FIXME: Don't panic
                 //let total_streams: u64 = num_unpack_streams_in_folders.unwrap().iter().sum();
                 let total_streams: u64 = 1;
-                crate::to_usize_or_err!(total_streams)
+                to_usize_or_err!(total_streams)
             }),
         ),
     )(input)?;
@@ -372,7 +388,7 @@ pub fn substreams_info(input: &[u8], num_folders: usize) -> SevenZResult<SubStre
         "coders_info unknown_crcs",
         preceded_opt(
             tag([PropertyID::CRC as u8]),
-            count(sevenz_uint64, crate::to_usize_or_err!(1)),
+            count(sevenz_uint64, to_usize_or_err!(1)),
         ),
     )(input)?;
 
