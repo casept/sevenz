@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::convert::TryFrom;
+use core::convert::{From, TryFrom};
 use nom::error::*;
 
 /// The types of errors that may be returned by the parser.

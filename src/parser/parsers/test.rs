@@ -1,14 +1,17 @@
 extern crate std;
 
-use super::parsers;
-use super::types;
+use super::super::parsers;
+use super::super::types;
 
 use alloc::vec;
+use bitvec::prelude::*;
+
+const UNCOMPRESSED_ARCHIVE: &[u8] = include_bytes!("../../../testdata/test-uncompressed.txt.7z");
 
 #[test]
 fn archive_version() {
-    let data = include_bytes!("../../testdata/test-uncompressed.txt.7z");
-    let (_, res) = parsers::archive_version(&data[6..]).unwrap();
+    let input = UNCOMPRESSED_ARCHIVE;
+    let (_, res) = parsers::archive_version(&input[6..]).unwrap();
 
     let expected = types::ArchiveVersion { major: 0, minor: 4 };
 
@@ -17,8 +20,8 @@ fn archive_version() {
 
 #[test]
 fn signature_header() {
-    let data = include_bytes!("../../testdata/test-uncompressed.txt.7z");
-    let (_, res) = parsers::signature_header(data).unwrap();
+    let input = UNCOMPRESSED_ARCHIVE;
+    let (_, res) = parsers::signature_header(input).unwrap();
 
     let expected_version = types::ArchiveVersion { major: 0, minor: 4 };
     let expected_start_header = types::StartHeader {
@@ -53,8 +56,50 @@ fn sevenz_uint64() {
 }
 
 #[test]
+fn take_bitvec() {
+    let test_cases: &[([u8; 10], usize, usize, BitVec)] = &[
+        ([0; 10], 0, 10, bitvec![]),
+        (
+            [0b1001_0000, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            4,
+            9,
+            bitvec![1, 0, 0, 1],
+        ),
+        (
+            [0b1000_0010, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            8,
+            9,
+            bitvec![1, 0, 0, 0, 0, 0, 1, 0],
+        ),
+        (
+            [0b1101_1111, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            5,
+            9,
+            bitvec![1, 1, 0, 1, 1, 0, 0, 0],
+        ),
+        (
+            [0b1000_0010, 0b0010_0010, 0, 0, 0, 0, 0, 0, 0, 0],
+            16,
+            8,
+            bitvec![1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+        ),
+        (
+            [0b1000_0010, 0b0010_0010, 0b1001_1111, 0, 0, 0, 0, 0, 0, 0],
+            20,
+            7,
+            bitvec![1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1],
+        ),
+    ];
+
+    for (input, num_bits, bytes_remaining, expected) in test_cases {
+        let (remainder, res) = parsers::take_bitvec(input, *num_bits).unwrap();
+        assert_eq!(remainder.len(), *bytes_remaining);
+        assert_eq!(res, *expected);
+    }
+}
+#[test]
 fn pack_info() {
-    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let input = UNCOMPRESSED_ARCHIVE;
     let expected = types::PackInfo {
         pack_pos: 0,
         num_pack_streams: 1,
@@ -70,7 +115,7 @@ fn pack_info() {
 
 #[test]
 fn coders_info() {
-    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let input = UNCOMPRESSED_ARCHIVE;
     let expected = types::CodersInfo {
         num_folders: 1,
         folders_or_data_stream_index: either::Right(vec![types::Folder {
@@ -95,7 +140,7 @@ fn coders_info() {
 
 #[test]
 fn substreams_info() {
-    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let input = UNCOMPRESSED_ARCHIVE;
     // Cut parts not relevant here
     let input = &input[71..];
 
@@ -104,7 +149,7 @@ fn substreams_info() {
 
 #[test]
 fn streams_info() {
-    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let input = UNCOMPRESSED_ARCHIVE;
     // Cut parts not relevant here
     let input = &input[53..];
 
@@ -113,7 +158,7 @@ fn streams_info() {
 
 #[test]
 fn files_info() {
-    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let input = UNCOMPRESSED_ARCHIVE;
     // Cut parts not relevant here
     let input = &input[80..];
 
@@ -122,7 +167,7 @@ fn files_info() {
 
 #[test]
 fn header() {
-    let input = include_bytes!("../../testdata/test-uncompressed.txt.7z");
+    let input = UNCOMPRESSED_ARCHIVE;
     // Already tested elsewhere, just here to skip ahead enough bytes
     let (input, _) = parsers::signature_header(input).unwrap();
     // From here, header should be in 19 bytes

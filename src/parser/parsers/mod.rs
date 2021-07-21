@@ -1,6 +1,11 @@
 //! Custom nom parsers for the 7z format
 
-extern crate std;
+mod bit;
+pub use bit::*;
+mod sevenz_uint64;
+pub use sevenz_uint64::*;
+#[cfg(test)]
+mod test;
 
 use super::combinators::*;
 use super::crc;
@@ -10,12 +15,10 @@ use super::types::*;
 use alloc::vec;
 use alloc::vec::*;
 use core::convert::*;
-
-use either::*;
 use nom::bytes::complete::{tag, take};
 use nom::combinator::{cond, map, opt};
 use nom::error::context;
-use nom::multi::{count, length_count};
+use nom::multi::{count, length_count, many_till};
 use nom::number::complete::{le_u32, le_u64, u8};
 use nom::sequence::pair;
 
@@ -24,41 +27,6 @@ const MAGIC: [u8; 6] = [b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C];
 
 /// Error type that all parsers return.
 pub type SevenZResult<'a, T> = nom::IResult<&'a [u8], T, SevenZParserError<&'a [u8]>>;
-
-/// 7zip uses a weird packed integer format to represent some u64 values.
-/// Parse that and convert it to a normal u64 in native endianness.
-pub fn sevenz_uint64(input: &[u8]) -> SevenZResult<u64> {
-    fn count_leading_ones(b: u8) -> usize {
-        let mut num: usize = 0;
-        for shift in 0..8 {
-            if ((b << shift) & 0b1000_0000) > 0 {
-                num += 1;
-            } else {
-                return num;
-            }
-        }
-        return num;
-    }
-
-    let (input, first_byte) = context("sevenz_uint64 read first byte", u8)(input)?;
-    let mut val = 0;
-    let mut input_mut: &[u8] = input;
-    let leading_ones = count_leading_ones(first_byte);
-    for i in 0..leading_ones {
-        let (input2, next_byte) = context("sevenz_uint64 read following bytes", u8)(input_mut)?;
-        input_mut = input2;
-        val += (next_byte as u64) << (i * 8);
-    }
-    val += (((first_byte as u64) & ((1 << (8 - (leading_ones as u64))) - 1)) << (leading_ones * 8))
-        as u64;
-    return Ok((input_mut, val));
-}
-/// Like sevenz_uint64, but convert to usize and return an error if the conversion fails.
-pub fn sevenz_uint64_as_usize(input: &[u8]) -> SevenZResult<usize> {
-    let (input, as_u64) = context("sevenz_uint64_as_usize as_u64", sevenz_uint64)(input)?;
-    let as_usize = crate::to_usize_or_err!(as_u64);
-    return Ok((input, as_usize));
-}
 
 pub fn archive_version(input: &[u8]) -> SevenZResult<ArchiveVersion> {
     let (input, major) = context("archive_version major", u8)(input)?;
@@ -264,12 +232,9 @@ pub fn folder(input: &[u8]) -> SevenZResult<Folder> {
 
     let num_out_streams_total: u64 = coders_vec
         .iter()
-        .map(|x| {
-            if x.complex.is_none() {
-                1
-            } else {
-                x.complex.unwrap().num_out_streams
-            }
+        .map(|x| match x.complex {
+            Some(c) => c.num_out_streams,
+            None => 1,
         })
         .sum();
     let num_out_streams_total: usize = crate::to_usize_or_err!(num_out_streams_total);
@@ -282,12 +247,9 @@ pub fn folder(input: &[u8]) -> SevenZResult<Folder> {
 
     let num_in_streams_total: u64 = coders_vec
         .iter()
-        .map(|x| {
-            if x.complex.is_none() {
-                1
-            } else {
-                x.complex.unwrap().num_in_streams
-            }
+        .map(|x| match x.complex {
+            Some(c) => c.num_in_streams,
+            None => 1,
         })
         .sum();
     let num_in_streams_total: usize = crate::to_usize_or_err!(num_in_streams_total);
@@ -348,12 +310,9 @@ pub fn coders_info(input: &[u8]) -> SevenZResult<CodersInfo> {
         .collect();
     let num_total_out_streams: u64 = all_coders
         .iter()
-        .map(|x| {
-            if x.complex.is_none() {
-                1
-            } else {
-                x.complex.unwrap().num_out_streams
-            }
+        .map(|x| match x.complex {
+            Some(c) => c.num_out_streams,
+            None => 1,
         })
         .sum();
     let num_total_out_streams = crate::to_usize_or_err!(num_total_out_streams);
@@ -446,15 +405,48 @@ pub fn streams_info(input: &[u8]) -> SevenZResult<StreamsInfo> {
     ));
 }
 
+pub fn files_property_empty_stream(input: &[u8], num_files: usize) -> SevenZResult<FilesProperty> {
+    let (input, _) = context(
+        "files_property_empty_stream PropertyID::EmptyStream",
+        tag([PropertyID::EmptyStream as u8]),
+    )(input)?;
+
+    let (input, bits) = context("files_property_empty_stream is_empty bits", |x| {
+        take_bitvec(x, num_files)
+    })(input)?;
+
+    return Ok((input, FilesProperty::EmptyStream(bits)));
+}
+
+pub fn files_property(input: &[u8], num_files: usize) -> SevenZResult<FilesProperty> {
+    let (input, prop) = context("files_property", |x| {
+        files_property_empty_stream(x, num_files)
+    })(input)?;
+    return Ok((input, prop));
+}
+
 pub fn files_info(input: &[u8]) -> SevenZResult<FilesInfo> {
     let (input, _) = context(
         "files_info PropertyID::FilesInfo",
         tag([PropertyID::FilesInfo as u8]),
     )(input)?;
 
-    let (input, num_files) = context("files_info num_files", sevenz_uint64)(input)?;
+    let (input, num_files) = context("files_info num_files", sevenz_uint64_as_usize)(input)?;
+    let (input, (files_properties, _)) = context(
+        "files_info files_properties",
+        many_till(
+            |x| files_property(x, num_files),
+            tag([PropertyID::End as u8]),
+        ),
+    )(input)?;
 
-    return Ok((input, FilesInfo {}));
+    return Ok((
+        input,
+        FilesInfo {
+            num_files,
+            properties: files_properties,
+        },
+    ));
 }
 
 pub fn header(input: &[u8]) -> SevenZResult<()> {
@@ -471,7 +463,6 @@ pub fn header(input: &[u8]) -> SevenZResult<()> {
                 context("header main_streams_info", streams_info)(input)?;
         }
         _ => {
-            std::println!("Segment prop ID: {:?}", segment);
             panic!("This has to be fixed");
         }
     }

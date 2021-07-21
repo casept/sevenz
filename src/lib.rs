@@ -4,6 +4,7 @@
 
 #![no_std]
 #![allow(clippy::needless_return)]
+#![forbid(unsafe_code)]
 
 extern crate alloc;
 

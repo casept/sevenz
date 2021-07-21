@@ -6,9 +6,8 @@ authors = ["casept <davids.paskevics@gmail.com>"]
 description = "A crate for manipulating 7zip archives."
 
 [dependencies]
-# Currently, enabling alloc for nom also pulls in bitvec which we don't need.
-# Not really a problem asides from bloating the dependency graph, but it'd still be nice for
-# https://github.com/Geal/nom/issues/1287 to be closed.
-nom = {version = "6", default-features = false, features = ["alloc"] }
+nom = {version = "6", default-features = false, features = ["alloc", "bitvec"] }
+# Nom is stuck on an old version, don't want to bloat the dep graph
+bitvec = "0.19"
 either = {version = "1", default-features = false}
 crc = "2"

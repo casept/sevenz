@@ -1,6 +1,8 @@
 //! Structures that make up 7zip archives
 
+use alloc::string::String;
 use alloc::vec::Vec;
+use bitvec::prelude::*;
 use core::convert::TryFrom;
 use either::Either;
 
@@ -121,8 +123,29 @@ pub struct AdditionalStreams {}
 #[derive(Debug)]
 pub struct MainStreamsInfo {}
 
-#[derive(Debug)]
-pub struct FilesInfo {}
+/// Left: external data index, right: time
+pub type FileTime = Either<u64, u64>;
+
+/// Left: external data index, right: name
+pub type FileName = Either<u64, String>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FilesProperty {
+    EmptyStream(BitVec),
+    EmptyFile(BitVec),
+    Anti(BitVec),
+    CTime(Vec<Option<FileTime>>),
+    ATime(Vec<Option<FileTime>>),
+    MTime(Vec<Option<FileTime>>),
+    Names(Vec<FileName>),
+    Attributes(Vec<Option<u32>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FilesInfo {
+    pub num_files: usize,
+    pub properties: Vec<FilesProperty>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CoderComplex {
