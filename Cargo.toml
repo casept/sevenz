@@ -8,6 +8,6 @@ description = "A crate for manipulating 7zip archives."
 [dependencies]
 nom = {version = "6", default-features = false, features = ["alloc", "bitvec"] }
 # Nom is stuck on an old version, don't want to bloat the dep graph
-bitvec = "0.19"
+bitvec = "0.19.5"
 either = {version = "1", default-features = false}
 crc = "2"
