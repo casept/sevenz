@@ -11,3 +11,4 @@ nom = {version = "6", default-features = false, features = ["alloc", "bitvec"] }
 bitvec = "0.19.5"
 either = {version = "1", default-features = false}
 crc = "2"
+widestring = {version = "0.4.3", default-features = false, features = ["alloc"]}

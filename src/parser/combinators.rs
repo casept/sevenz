@@ -1,5 +1,10 @@
+use alloc::vec::Vec;
+
+use bitvec::prelude::*;
 use either::*;
+use nom::combinator::cond;
 use nom::error::ParseError;
+use nom::multi::count;
 use nom::IResult;
 
 /// Runs the second parser and returns it's output/error if the first parser succeeds.
@@ -41,5 +46,22 @@ where
             let (input, val) = second.parse(input)?;
             Ok((input, Right(val)))
         }
+    }
+}
+
+/// Runs the given parser for each `true` in the given `BitVec` and pushes a `Some(parser_retval)`.
+/// For each `false`, does not run the parser and pushes a `None`.
+pub fn many_cond_opt<I, O, E, F>(f: F, bv: BitVec) -> impl FnMut(I) -> IResult<I, Vec<Option<O>>, E>
+where
+    F: nom::Parser<I, O, E> + Clone,
+    I: Clone + PartialEq,
+    O: Sized,
+    E: ParseError<I>,
+{
+    move |input: I| {
+        let mut iter = bv.iter();
+        let (input, ret): (I, Vec<Option<O>>) =
+            count(cond(*iter.next().unwrap(), f.clone()), bv.len())(input)?;
+        return Ok((input, ret));
     }
 }

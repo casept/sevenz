@@ -3,13 +3,15 @@ use core::convert::{From, TryFrom};
 use nom::error::*;
 
 /// Error type for failed conversions.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SevenZConversionError {
     ToUsize(<usize as TryFrom<u64>>::Error),
+    // Actual FromUtf16Error not saved because it would ruin Clone and PartialEq impl
+    ToString,
 }
 
 /// The types of errors that may be returned by the parser.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SevenZParserErrorKind<I> {
     Nom(I, nom::error::ErrorKind),
     // Crc(expected, got)
@@ -19,6 +21,8 @@ pub enum SevenZParserErrorKind<I> {
     ConversionFailure(SevenZConversionError),
     // InvalidBooleanByte(value)
     InvalidBooleanByte(u8),
+    FilesEmptyFileBeforeFilesEmptyStream,
+    FilesAntiBeforeFilesEmptyStream,
 }
 
 /// The error type returned by all parsers.
