@@ -65,3 +65,18 @@ where
         return Ok((input, ret));
     }
 }
+
+/// Run the parser and turn it's `IResult<I, O, E>` into an `IResult<I, Some(O), E>`.
+pub fn wrap_some<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>, E>
+where
+    F: nom::Parser<I, O, E>,
+    I: Clone + PartialEq,
+    O: Sized,
+    E: ParseError<I>,
+{
+    move |input: I| {
+        let (input, ret): (I, O) = f.parse(input)?;
+        let ret = Some(ret);
+        return Ok((input, ret));
+    }
+}

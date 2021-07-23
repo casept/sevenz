@@ -129,6 +129,9 @@ pub type FileTime = Either<u64, u64>;
 /// Left: external data index, right: name
 pub type FileName = Either<u64, String>;
 
+/// Left: External data index, right: attrs
+pub type FileAttr = Either<u64, u32>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilesProperty {
     EmptyStream(BitVec),
@@ -138,7 +141,7 @@ pub enum FilesProperty {
     ATime(Vec<Option<FileTime>>),
     MTime(Vec<Option<FileTime>>),
     Names(Vec<FileName>),
-    Attributes(Vec<Option<u32>>),
+    Attributes(Vec<Option<FileAttr>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,10 +1,11 @@
 extern crate std;
-
 use super::super::parsers;
 use super::super::types;
 
 use alloc::vec;
 use bitvec::prelude::*;
+use either::*;
+use std::prelude::rust_2018::*;
 
 const UNCOMPRESSED_ARCHIVE: &[u8] = include_bytes!("../../../testdata/test-uncompressed.txt.7z");
 
@@ -192,10 +193,19 @@ fn streams_info() {
 #[test]
 fn files_info() {
     let input = UNCOMPRESSED_ARCHIVE;
+    let expected = types::FilesInfo {
+        num_files: 1,
+        properties: vec![
+            types::FilesProperty::Names(vec![Right(String::from("test.txt"))]),
+            types::FilesProperty::ATime(vec![Some(Right(132708606310000000))]),
+            types::FilesProperty::Attributes(vec![Some(Right(2175041568))]),
+        ],
+    };
     // Cut parts not relevant here
     let input = &input[80..];
 
-    let (_, res) = parsers::files_info(input).unwrap();
+    let (_, res) = parsers::files_info(input, 0).unwrap();
+    assert_eq!(res, expected);
 }
 
 #[test]

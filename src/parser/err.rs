@@ -23,6 +23,7 @@ pub enum SevenZParserErrorKind<I> {
     InvalidBooleanByte(u8),
     FilesEmptyFileBeforeFilesEmptyStream,
     FilesAntiBeforeFilesEmptyStream,
+    DummyNotAllZeroes,
 }
 
 /// The error type returned by all parsers.

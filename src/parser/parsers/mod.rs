@@ -88,7 +88,7 @@ pub fn bool_byte(input: &[u8]) -> SevenZResult<bool> {
     return match byte {
         0 => Ok((input, false)),
         1 => Ok((input, true)),
-        _ => Err(nom::Err::Failure(SevenZParserError::new(
+        _ => Err(nom::Err::Error(SevenZParserError::new(
             SevenZParserErrorKind::InvalidBooleanByte(byte),
         ))),
     };
@@ -99,7 +99,7 @@ pub fn property_id(input: &[u8]) -> SevenZResult<PropertyID> {
     match PropertyID::try_from(p_u8) {
         Ok(p) => return Ok((input, p)),
         Err(_) => {
-            return Err(nom::Err::Failure(SevenZParserError::new(
+            return Err(nom::Err::Error(SevenZParserError::new(
                 SevenZParserErrorKind::InvalidPropertyID(p_u8),
             )))
         }
@@ -111,7 +111,7 @@ pub fn tag_property_id(input: &[u8], id: PropertyID) -> SevenZResult<PropertyID>
     if p == id {
         return Ok((input, p));
     } else {
-        return Err(nom::Err::Failure(SevenZParserError::new(
+        return Err(nom::Err::Error(SevenZParserError::new(
             SevenZParserErrorKind::Nom(input, nom::error::ErrorKind::Tag),
         )));
     }
