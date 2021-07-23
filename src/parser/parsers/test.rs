@@ -178,7 +178,7 @@ fn substreams_info() {
     // Cut parts not relevant here
     let input = &input[71..];
 
-    let (_, res) = parsers::substreams_info(input, 1).unwrap();
+    let (_, res) = parsers::substreams_info(input, 1, 2).unwrap();
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn streams_info() {
     // Cut parts not relevant here
     let input = &input[53..];
 
-    let (_, res) = parsers::streams_info(input).unwrap();
+    let (_, res) = parsers::streams_info(input, None).unwrap();
 }
 
 #[test]

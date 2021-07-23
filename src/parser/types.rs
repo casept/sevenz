@@ -73,7 +73,7 @@ impl TryFrom<u8> for PropertyID {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackInfo {
     pub pack_pos: u64,
     pub num_pack_streams: usize,
@@ -81,7 +81,7 @@ pub struct PackInfo {
     pub crcs: Option<Vec<u32>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArchiveVersion {
     pub major: u8,
     pub minor: u8,
@@ -89,39 +89,33 @@ pub struct ArchiveVersion {
 
 pub const START_HEADER_SIZE_BYTES: usize = 8 + 8 + 4;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StartHeader {
     pub next_header_offset: u64,
     pub next_header_size: u64,
     pub next_header_crc: u32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SignatureHeader {
     pub archive_version: ArchiveVersion,
     pub start_header_crc: u32,
     pub start_header: StartHeader,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackedStreams {}
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackedStreamsForHeaders {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Packed {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArchiveProperties {
     // Would be nice to have property data also be 0-copy, but that'd
     // lead to some messy lifetimes.
     pub property_data: Vec<(PropertyID, Vec<u8>)>,
 }
-
-#[derive(Debug)]
-pub struct AdditionalStreams {}
-
-#[derive(Debug)]
-pub struct MainStreamsInfo {}
 
 /// Left: external data index, right: time
 pub type FileTime = Either<u64, u64>;
@@ -179,32 +173,32 @@ pub struct CodersInfo {
     pub folders_unpack_digests: Option<Vec<u32>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SubStreamsInfo {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StreamsInfo {
     pub pack_info: Option<PackInfo>,
     pub coders_info: Option<CodersInfo>,
     pub substreams_info: Option<SubStreamsInfo>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Header {
-    pub archive_properties: ArchiveProperties,
-    pub additional_streams: AdditionalStreams,
-    pub main_streams_info: MainStreamsInfo,
-    pub files_info: FilesInfo,
+    pub archive_properties: Option<ArchiveProperties>,
+    pub additional_streams: Option<StreamsInfo>,
+    pub main_streams: Option<StreamsInfo>,
+    pub files: Option<FilesInfo>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackedHeader {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HeaderInfo {}
 
 /// The top-level archive structure.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Archive {
     pub signature_header: SignatureHeader,
     pub packed_streams: Option<Vec<PackedStreams>>,
