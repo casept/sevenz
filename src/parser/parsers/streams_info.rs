@@ -13,14 +13,14 @@ pub fn pack_info(input: &[u8]) -> SevenZResult<PackInfo> {
     // TODO: For now, let's just assume that they're optional when their markers are present and vice versa.
     let (input, sizes) = context(
         "pack_info sizes",
-        preceded_opt(
+        preceded_opt_lazy(
             |x| tag_property_id(x, PropertyID::Size),
             count(sevenz_uint64, num_pack_streams),
         ),
     )(input)?;
     let (input, crcs) = context(
         "pack_info crcs",
-        preceded_opt(
+        preceded_opt_lazy(
             |x| tag_property_id(x, PropertyID::CRC),
             count(le_u32, num_pack_streams),
         ),
@@ -49,31 +49,43 @@ pub fn substreams_info(
     )(input)?;
 
     let (input, num_unpack_streams_in_folders) = context(
-        "coders_info num_unpack_streams_in_folders",
-        preceded_opt(
+        "substreams_info num_unpack_streams_in_folders",
+        preceded_opt_lazy(
             tag([PropertyID::NumUnPackStream as u8]),
             count(sevenz_uint64, num_folders),
         ),
     )(input)?;
 
+    // Fail if we'd expect a size block next, but don't know how long it'd be
+    let will_have_unpack_sizes =
+        tag::<[u8; 1], &[u8], SevenZParserError<&[u8]>>([PropertyID::Size as u8])(input).is_ok();
+    let total_streams = to_usize_or_err!(if will_have_unpack_sizes {
+        let num: Vec<u64> = if num_unpack_streams_in_folders.clone().is_some() {
+            num_unpack_streams_in_folders.clone().unwrap()
+        } else {
+            return Err(nom::Err::Failure(SevenZParserError::new(
+                SevenZParserErrorKind::CouldNotDetermineNumUnpackStreams,
+            )));
+        };
+        let v: u64 = num.iter().sum();
+        v
+    } else {
+        0
+    });
+
     let (input, unpack_sizes) = context(
-        "coders_info unpack_sizes",
-        preceded_opt(
+        "substreams_info unpack_sizes",
+        preceded_opt_lazy(
             tag([PropertyID::Size as u8]),
-            count(sevenz_uint64, {
-                // FIXME: Don't panic
-                //let total_streams: u64 = num_unpack_streams_in_folders.unwrap().iter().sum();
-                let total_streams: u64 = 1;
-                to_usize_or_err!(total_streams)
-            }),
+            count(sevenz_uint64, total_streams),
         ),
     )(input)?;
 
-    let (input, unknown_crcs) = context(
-        "coders_info unknown_crcs",
-        preceded_opt(
+    let (input, unknown_digests) = context(
+        "substreams_info unknown_crcs",
+        preceded_opt_lazy(
             tag([PropertyID::CRC as u8]),
-            count(sevenz_uint64, num_unknown_crcs),
+            count(le_u32, num_unknown_crcs),
         ),
     )(input)?;
 
@@ -82,7 +94,14 @@ pub fn substreams_info(
         tag([PropertyID::End as u8]),
     )(input)?;
 
-    return Ok((input, SubStreamsInfo {}));
+    return Ok((
+        input,
+        SubStreamsInfo {
+            num_unpack_streams_in_folders,
+            unpack_sizes,
+            unknown_digests,
+        },
+    ));
 }
 
 /// Read a Streams Info structure.

@@ -174,7 +174,11 @@ pub struct CodersInfo {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SubStreamsInfo {}
+pub struct SubStreamsInfo {
+    pub num_unpack_streams_in_folders: Option<Vec<u64>>,
+    pub unpack_sizes: Option<Vec<u64>>,
+    pub unknown_digests: Option<Vec<u32>>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StreamsInfo {

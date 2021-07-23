@@ -25,6 +25,7 @@ pub enum SevenZParserErrorKind<I> {
     FilesAntiBeforeFilesEmptyStream,
     DummyNotAllZeroes,
     CouldNotDetermineNumFolders,
+    CouldNotDetermineNumUnpackStreams,
 }
 
 /// The error type returned by all parsers.

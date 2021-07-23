@@ -147,7 +147,7 @@ pub fn coders_info(input: &[u8]) -> SevenZResult<CodersInfo> {
 
     let (input, folders_unpack_digests) = context(
         "coders_info unpack_digests",
-        preceded_opt(tag([PropertyID::CRC as u8]), count(le_u32, num_folders)),
+        preceded_opt_lazy(tag([PropertyID::CRC as u8]), count(le_u32, num_folders)),
     )(input)?;
 
     let (input, _) = context("coders_info PropertyID::End", tag([PropertyID::End as u8]))(input)?;

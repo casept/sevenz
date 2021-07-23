@@ -175,10 +175,17 @@ fn coders_info() {
 #[test]
 fn substreams_info() {
     let input = UNCOMPRESSED_ARCHIVE;
+    let expected = types::SubStreamsInfo {
+        num_unpack_streams_in_folders: None,
+        unpack_sizes: None,
+        unknown_digests: Some(vec![3224210433, 83886330, 792833]),
+    };
+
     // Cut parts not relevant here
     let input = &input[71..];
+    let (_, res) = parsers::substreams_info(input, 1, 3).unwrap();
 
-    let (_, res) = parsers::substreams_info(input, 1, 2).unwrap();
+    assert_eq!(res, expected);
 }
 
 #[test]

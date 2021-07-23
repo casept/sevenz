@@ -26,11 +26,11 @@ use core::convert::*;
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take};
-use nom::combinator::{cond, map, opt};
+use nom::combinator::{cond, map, opt, peek};
 use nom::error::context;
 use nom::multi::{count, length_count, many_till};
 use nom::number::complete::{le_u16, le_u32, le_u64, u8};
-use nom::sequence::pair;
+use nom::sequence::{pair, preceded};
 
 /// Header magic bytes
 const MAGIC: [u8; 6] = [b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C];

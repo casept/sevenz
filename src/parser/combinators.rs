@@ -7,9 +7,9 @@ use nom::error::ParseError;
 use nom::multi::count;
 use nom::IResult;
 
-/// Runs the second parser and returns it's output/error if the first parser succeeds.
-/// Doesn't run the second parser and returns Ok((input, None)) if the first parser fails.
-pub fn preceded_opt<I, O1, O2, E: ParseError<I>, F, G>(
+/// Runs the second parser and returns it's output/error only if the first parser succeeds.
+/// Doesn't run the second parser and returns `Ok((original_input, None)` if the first parser fails.
+pub fn preceded_opt_lazy<I, O1, O2, E: ParseError<I>, F, G>(
     mut first: F,
     mut second: G,
 ) -> impl FnMut(I) -> IResult<I, Option<O2>, E>
@@ -18,12 +18,12 @@ where
     G: nom::Parser<I, O2, E>,
     I: Clone,
 {
-    move |input: I| match first.parse(input.clone()) {
-        Ok((input, _)) => {
-            let (input, val) = second.parse(input)?;
-            return Ok((input, Some(val)));
+    move |old_input: I| match first.parse(old_input.clone()) {
+        Ok((new_input, _)) => {
+            let (final_input, val) = second.parse(new_input)?;
+            return Ok((final_input, Some(val)));
         }
-        Err(_) => Ok((input, None)),
+        Err(_) => Ok((old_input, None)),
     }
 }
 
