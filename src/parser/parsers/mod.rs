@@ -24,6 +24,7 @@ use alloc::vec;
 use alloc::vec::*;
 use core::convert::*;
 
+use either::*;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take};
 use nom::combinator::{cond, map, opt, peek};
@@ -85,6 +86,25 @@ pub fn signature_header(input: &[u8]) -> SevenZResult<SignatureHeader> {
             start_header,
         },
     ));
+}
+
+pub fn archive(input: &[u8]) -> SevenZResult<Archive> {
+    let (input, signature_header) = context("archive singnature_header", signature_header)(input)?;
+
+    // Skip ahead to beginning of next header
+    // FIXME: It's probably legitimate that this header is located at the end-of-file,
+    // which would be beyond the range indexable by a usize on 16 or 32-bit platforms.
+    // Nonetheless, this will only be relevant once streaming is implemented.
+    let header_offset = to_usize_or_err!(signature_header.start_header.next_header_offset);
+    let header_input = &input[header_offset..];
+    // TODO: Support packed headers
+    let (header_input, header) = context("archive header", header)(header_input)?;
+
+    let archive = Archive {
+        signature_header,
+        header_or_packed_header: Left(header),
+    };
+    return Ok((header_input, archive));
 }
 
 pub fn bool_byte(input: &[u8]) -> SevenZResult<bool> {

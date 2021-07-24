@@ -205,7 +205,5 @@ pub struct HeaderInfo {}
 #[derive(Debug, Clone, PartialEq)]
 pub struct Archive {
     pub signature_header: SignatureHeader,
-    pub packed_streams: Option<Vec<PackedStreams>>,
-    pub packed_streams_for_headers: Option<Vec<PackedStreamsForHeaders>>,
     pub header_or_packed_header: Either<Header, (PackedHeader, HeaderInfo)>,
 }

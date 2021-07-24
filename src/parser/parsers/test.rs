@@ -224,3 +224,55 @@ fn header() {
     let input = &input[19..];
     let (input, hdr) = parsers::header(input).unwrap();
 }
+
+#[test]
+fn archive() {
+    let input = UNCOMPRESSED_ARCHIVE;
+    let expected = types::Archive {
+        signature_header: types::SignatureHeader {
+            archive_version: types::ArchiveVersion { major: 0, minor: 4 },
+            start_header_crc: 9174449,
+            start_header: types::StartHeader {
+                next_header_offset: 19,
+                next_header_size: 90,
+                next_header_crc: 970299701,
+            },
+        },
+        header_or_packed_header: Left(types::Header {
+            archive_properties: None,
+            additional_streams: None,
+            main_streams: Some(types::StreamsInfo {
+                pack_info: Some(types::PackInfo {
+                    pack_pos: 0,
+                    num_pack_streams: 1,
+                    sizes: Some(vec![19]),
+                    crcs: None,
+                }),
+                coders_info: Some(types::CodersInfo {
+                    num_folders: 1,
+                    folders_or_data_stream_index: Right(vec![types::Folder {
+                        coders: vec![types::Coder {
+                            complex: None,
+                            attrs: None,
+                            id: vec![33, 1],
+                        }],
+                        bind_pairs: vec![],
+                        packed_streams_indices: Some(vec![0]),
+                    }]),
+                    streams_unpack_sizes: vec![15],
+                    folders_unpack_digests: None,
+                }),
+                substreams_info: Some(types::SubStreamsInfo {
+                    num_unpack_streams_in_folders: None,
+                    unpack_sizes: None,
+                    unknown_digests: Some(vec![3224210433, 83886330, 792833]),
+                }),
+            }),
+            files: None,
+        }),
+    };
+
+    let (_, res) = parsers::archive(input).unwrap();
+
+    assert_eq!(res, expected);
+}

@@ -127,7 +127,7 @@ pub fn streams_info(input: &[u8], num_folders: Option<usize>) -> SevenZResult<St
     // FIXME: Don't hardcode num_unknown_crcs
     let (input, substreams_info_data) = context(
         "streams_info substreams_info",
-        opt(|x| substreams_info(x, 1, 2)),
+        opt(|x| substreams_info(x, 1, 3)),
     )(input)?;
     let (input, _) = context("streams_info PropertyID::End", tag([PropertyID::End as u8]))(input)?;
 
