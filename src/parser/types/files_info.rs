@@ -32,7 +32,7 @@ impl FilesInfo {
         let props: Vec<FilesProperty> = self
             .properties
             .iter()
-            .map(|x| *x)
+            .map(|x| x.clone())
             .filter(|x| match x {
                 kind => true,
                 _ => false,
@@ -40,7 +40,7 @@ impl FilesInfo {
             .take(1)
             .collect();
         let prop = if props.len() > 0 {
-            Some(props[0])
+            Some(props[0].clone())
         } else {
             None
         };

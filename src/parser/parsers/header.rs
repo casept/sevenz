@@ -68,7 +68,7 @@ pub fn header(input: &[u8]) -> SevenZResult<Header> {
         cond(have_msi.is_some(), |x| streams_info(x, num_folders)),
     )(input)?;
 
-    // FIXME: Pass proper num_empty streams
+    // FIXME: Pass proper num_empty_streams
     let (input, files) = context("header files_info", opt(|x| files_info(x, 0)))(input)?;
     let (input, _) = context("header PropertyID::End", tag([PropertyID::End as u8]))(input)?;
 
@@ -82,18 +82,3 @@ pub fn header(input: &[u8]) -> SevenZResult<Header> {
         },
     ));
 }
-
-/*
-pub fn archive(input: &[u8]) -> SevenZResult<Archive> {
-    let (input, signature_header) = to_err!(signature_header(input));
-    return Ok((
-        input,
-        Archive {
-            signature_header,
-            packed_streams,
-            packed_streams_for_headers,
-            header_or_packed_header,
-        },
-    ));
-}
-*/

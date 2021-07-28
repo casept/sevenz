@@ -268,7 +268,14 @@ fn archive() {
                     unknown_digests: Some(vec![3224210433, 83886330, 792833]),
                 }),
             }),
-            files: None,
+            files: Some(types::FilesInfo {
+                num_files: 1,
+                properties: vec![
+                    types::FilesProperty::Names(vec![Right(String::from("test.txt"))]),
+                    types::FilesProperty::ATime(vec![Some(Right(132708606310000000))]),
+                    types::FilesProperty::Attributes(vec![Some(Right(2175041568))]),
+                ],
+            }),
         }),
     };
 

@@ -8,5 +8,6 @@
 
 extern crate alloc;
 
+mod codec;
 mod parser;
 pub mod read;

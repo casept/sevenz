@@ -89,7 +89,7 @@ pub fn signature_header(input: &[u8]) -> SevenZResult<SignatureHeader> {
 }
 
 pub fn archive(input: &[u8]) -> SevenZResult<Archive> {
-    let (input, signature_header) = context("archive singnature_header", signature_header)(input)?;
+    let (input, signature_header) = context("archive signature_header", signature_header)(input)?;
 
     // Skip ahead to beginning of next header
     // FIXME: It's probably legitimate that this header is located at the end-of-file,
@@ -99,6 +99,16 @@ pub fn archive(input: &[u8]) -> SevenZResult<Archive> {
     let header_input = &input[header_offset..];
     // TODO: Support packed headers
     let (header_input, header) = context("archive header", header)(header_input)?;
+    // Verify header CRC
+    let header_size = input.len() - header_input.len();
+    let header_data = &input[header_offset..header_offset + header_size];
+    let header_crc = crc::sevenz_crc(header_data);
+    let expected_header_crc = signature_header.start_header.next_header_crc;
+    if header_crc != expected_header_crc {
+        return Err(nom::Err::Error(SevenZParserError::new(
+            SevenZParserErrorKind::Crc(expected_header_crc, header_crc),
+        )));
+    }
 
     let archive = Archive {
         signature_header,
