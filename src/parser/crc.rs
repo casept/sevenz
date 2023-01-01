@@ -10,6 +10,8 @@ pub const CRC_32_7Z: Algorithm<u32> = Algorithm {
     xorout: 0xffffffff,
     check: 0xfc891918,
     residue: 0xc704dd7b,
+    // TODO: Check
+    width: 32,
 };
 
 pub fn sevenz_crc(input: &[u8]) -> u32 {

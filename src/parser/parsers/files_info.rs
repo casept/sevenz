@@ -54,8 +54,7 @@ fn time(input: &[u8], num_files: usize) -> SevenZResult<Vec<Option<FileTime>>> {
         Some(d) => d,
         None => {
             let bits: Vec<bool> = core::iter::repeat(true).take(num_files).collect();
-            let mut b = BitVec::new();
-            b.extend_from_slice(&bits);
+            let mut b = BitVec::from_iter(bits);
             b
         }
     };
@@ -110,7 +109,7 @@ fn wchar_str(input: &[u8]) -> SevenZResult<String> {
     let (input, (mut data, _)) = context("wchar_str data", many_till(le_u16, tag([0, 0])))(input)?;
     data.push(0);
     // Convert
-    let win_str = U16CStr::from_slice_with_nul(&data).unwrap();
+    let win_str = U16CString::from_vec_truncate(data);
     let res = match win_str.to_string() {
         Ok(s) => s,
         Err(_) => {
@@ -163,8 +162,7 @@ fn attrs(input: &[u8], num_files: usize) -> SevenZResult<FilesProperty> {
         Some(d) => d,
         None => {
             let bits: Vec<bool> = core::iter::repeat(true).take(num_files).collect();
-            let mut b = BitVec::new();
-            b.extend_from_slice(&bits);
+            let b = BitVec::from_iter(bits);
             b
         }
     };

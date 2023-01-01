@@ -1,14 +1,15 @@
 [package]
 name = "sevenz"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 authors = ["casept <davids.paskevics@gmail.com>"]
 description = "A crate for manipulating 7zip archives."
 
 [dependencies]
-nom = {version = "6", default-features = false, features = ["alloc", "bitvec"] }
-# Nom is stuck on an old version, don't want to bloat the dep graph
-bitvec = "0.19.5"
+nom = {version = "7", default-features = false, features = ["alloc"] }
+bitvec = "1"
 either = {version = "1", default-features = false}
-crc = "2"
-widestring = {version = "0.4.3", default-features = false, features = ["alloc"]}
+crc = "3"
+widestring = {version = "1", default-features = false, features = ["alloc"]}
+# Upstream still hasn't merged bitvec 1.0 PR
+nom-bitvec = {git = "https://github.com/CJKay/nom-bitvec", branch = "main"}
